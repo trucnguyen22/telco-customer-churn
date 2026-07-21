@@ -1,6 +1,6 @@
 # Telco Customer Churn Analysis
 
-An end-to-end churn analysis on the [Telco Customer Churn dataset](WA_FnUseC_TelcoCustomerChurn.csv) (7,043 telecom customers), following a standard data-analysis workflow: data understanding → cleaning → EDA → feature engineering → modeling → evaluation → interpretation.
+An end-to-end churn analysis on the [Telco Customer Churn dataset](data/WA_Fn-UseC_-Telco-Customer-Churn.csv) (7,043 telecom customers), following a standard data-analysis workflow: data understanding → cleaning → EDA → feature engineering → modeling → evaluation → interpretation.
 
 ## Contents
 
