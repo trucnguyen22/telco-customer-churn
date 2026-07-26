@@ -84,3 +84,10 @@ def test_extract_target_maps_yes_to_one(make_raw):
     assert extract_target(make_raw(Churn="Yes")).iloc[0] == 1
     assert extract_target(make_raw(Churn="No")).iloc[0] == 0
     assert extract_target(make_raw()).name == "churn"
+
+
+def test_charges_delta_rounds_to_two_decimals(make_raw):
+    # 100 / 3 = 33.333...; 50 - 33.333... = 16.666... -> rounds to 16.67
+    features = build_features(make_raw(tenure=3, TotalCharges="100", MonthlyCharges=50.0))
+
+    assert features.loc[0, "charges_delta"] == 16.67
