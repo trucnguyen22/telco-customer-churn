@@ -8,8 +8,11 @@ version = "0.1.0"
 description = "Versioned batch pipeline for Telco customer churn scoring."
 requires-python = ">=3.11"
 dependencies = [
-    "pandas>=3.0",
+    "pandas>=2.2",
     "scikit-learn>=1.4",
+    # <3.14: mlflow 3.14.0's UI server crashes on Python 3.14
+    # (imports importlib.abc.Traversable, removed in 3.14)
+    "mlflow>=2.15,<3.14",
 ]
 
 [project.optional-dependencies]
