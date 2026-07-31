@@ -55,12 +55,6 @@ RF_PARAMS = {
 
 
 def build_pipeline() -> Pipeline:
-    """Build the feature-processing and classifier pipeline.
-
-    This saved MLflow pipeline can be reused directly for scoring. The
-    ``handle_unknown="ignore"`` setting keeps inference robust when a
-    category appears that was not present in training.
-    """
     preprocessor = ColumnTransformer(
         [
             ("num", StandardScaler(), NUMERIC_FEATURES),
@@ -70,10 +64,7 @@ def build_pipeline() -> Pipeline:
     return Pipeline([("pre", preprocessor), ("model", RandomForestClassifier(**RF_PARAMS))])
 
 
-def evaluate(
-    pipeline: Pipeline, X_test: pd.DataFrame, y_test: pd.Series
-) -> dict[str, float]:
-    """Held-out metrics for a fitted pipeline."""
+def evaluate(pipeline: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> dict[str, float]:
     pred = pipeline.predict(X_test)
     proba = pipeline.predict_proba(X_test)[:, 1]
     return {
@@ -87,25 +78,26 @@ def evaluate(
 
 def train(data_path: str | Path) -> dict[str, float]:
     """Run one training cycle, log it to MLflow, return test metrics."""
+    
+    # Load data, exclude brand-new customers (tenure == 0).
     raw = load_raw(data_path)
-
-    # Training policy: exclude brand-new customers (tenure == 0). They have
-    # not had the opportunity to churn, so their labels carry no signal.
-    # Scoring applies no such filter; build_features handles them there.
     raw = raw[raw["tenure"] > 0]
 
+    # Clean, Prepare data
     X = build_features(raw)
     y = extract_target(raw)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
     )
 
+    # Wrap model into a pipeline
+    # Train and Evaluate
     pipeline = build_pipeline()
+    pipeline.fit(X_train, y_train)
+    metrics = evaluate(pipeline, X_test, y_test)
 
+    # MLflow Tracking
     with mlflow.start_run():
-        pipeline.fit(X_train, y_train)
-        metrics = evaluate(pipeline, X_test, y_test)
-
         mlflow.log_params(RF_PARAMS)
         mlflow.log_params({"test_size": TEST_SIZE, "n_training_rows": len(X_train)})
         mlflow.log_metrics(metrics)
@@ -130,10 +122,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # MLflow setups (uri, experiment, runs)
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI))
     mlflow.set_experiment(EXPERIMENT_NAME)
 
+    # MLflow runs and Training process
     metrics = train(args.data)
+    
     for name, value in metrics.items():
         print(f"{name:9s} {value:.3f}")
 
