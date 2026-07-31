@@ -1,13 +1,12 @@
-"""Training job: fit the churn pipeline and log a versioned run to MLflow.
+"""Model training and tracking: fit model and log a versioned run to MLflow.
 
 Run from the repository root:
 
     python -m telco_churn.train [--data PATH]
 
-Each invocation produces one MLflow run (parameters, metrics, fitted
-pipeline) and registers a new version of the "telco-churn" model.
-Promotion to the "production" alias is a separate, deliberate step:
-training a candidate and choosing to serve it are different decisions.
+Each execution produces one MLflow run (parameters, metrics, fitted
+pipeline, "telco-churn" model version). The MLflow "production" alias is 
+chosen to serve as 'Model endpoint'.
 """
 
 import argparse
@@ -17,6 +16,7 @@ from pathlib import Path
 import mlflow
 import pandas as pd
 from mlflow.models import infer_signature
+from mlflow import sklearn
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
@@ -55,28 +55,19 @@ RF_PARAMS = {
 
 
 def build_pipeline() -> Pipeline:
-    """The blessed model recipe from the notebook's model selection.
+    """Build the feature-processing and classifier pipeline.
 
-    Preprocessing is inside the pipeline so it is fit only on training
-    folds (no leakage) and ships with the model as one artifact.
-    ``handle_unknown="ignore"`` makes categories never seen in training
-    encode as all-zeros at scoring time instead of raising.
+    This saved MLflow pipeline can be reused directly for scoring. The
+    ``handle_unknown="ignore"`` setting keeps inference robust when a
+    category appears that was not present in training.
     """
     preprocessor = ColumnTransformer(
         [
             ("num", StandardScaler(), NUMERIC_FEATURES),
-            (
-                "cat",
-                OneHotEncoder(
-                    drop="first", handle_unknown="ignore", sparse_output=False
-                ),
-                CATEGORICAL_FEATURES,
-            ),
+            ("cat", OneHotEncoder(drop="first", handle_unknown="ignore", sparse_output=False), CATEGORICAL_FEATURES)
         ]
     )
-    return Pipeline(
-        [("pre", preprocessor), ("model", RandomForestClassifier(**RF_PARAMS))]
-    )
+    return Pipeline([("pre", preprocessor), ("model", RandomForestClassifier(**RF_PARAMS))])
 
 
 def evaluate(
@@ -86,11 +77,11 @@ def evaluate(
     pred = pipeline.predict(X_test)
     proba = pipeline.predict_proba(X_test)[:, 1]
     return {
-        "accuracy": accuracy_score(y_test, pred),
-        "precision": precision_score(y_test, pred),
-        "recall": recall_score(y_test, pred),
-        "f1": f1_score(y_test, pred),
-        "roc_auc": roc_auc_score(y_test, proba),
+        "accuracy": float(accuracy_score(y_test, pred)),
+        "precision": float(precision_score(y_test, pred)),
+        "recall": float(recall_score(y_test, pred)),
+        "f1": float(f1_score(y_test, pred)),
+        "roc_auc": float(roc_auc_score(y_test, proba)),
     }
 
 
@@ -118,7 +109,7 @@ def train(data_path: str | Path) -> dict[str, float]:
         mlflow.log_params(RF_PARAMS)
         mlflow.log_params({"test_size": TEST_SIZE, "n_training_rows": len(X_train)})
         mlflow.log_metrics(metrics)
-        mlflow.sklearn.log_model(
+        sklearn.log_model(
             pipeline,
             name="model",
             signature=infer_signature(X_train, pipeline.predict_proba(X_train)[:, 1]),

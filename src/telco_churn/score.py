@@ -1,13 +1,12 @@
-"""Batch scoring job: apply the production model to a customer extract.
+"""Model batch endpoint: apply the production model to a raw customer extract.
 
 Run from the repository root:
 
     python -m telco_churn.score [--data PATH] [--out PATH] [--threshold P]
 
 Loads whichever model version the MLflow registry's "production" alias
-points at, scores every customer in the extract (including brand-new
-tenure-0 customers), and writes a churn-score table with one row per
-customer: customerID, churn_probability, churn_flag.
+points at, scores every customer in the extract, and writes a churn-score 
+pd.DataFrame (customerID, churn_probability, churn_flag).
 """
 
 import argparse
@@ -16,6 +15,7 @@ from pathlib import Path
 
 import mlflow
 import pandas as pd
+from mlflow.sklearn import load_model
 from sklearn.pipeline import Pipeline
 
 from telco_churn.data import load_raw
@@ -28,18 +28,15 @@ MODEL_URI = "models:/telco-churn@production"
 DEFAULT_THRESHOLD = 0.5
 
 
-def score_frame(
-    model: Pipeline, raw_df: pd.DataFrame, threshold: float
-) -> pd.DataFrame:
+def score(model: Pipeline, raw_df: pd.DataFrame, threshold: float) -> pd.DataFrame:
     """Score every customer in a raw extract.
 
-    Row-preserving: one output row per input row, in the same order.
+    Row-preserving: one output row per input row.
 
     Args:
-        model: A fitted pipeline accepting the output of
-            ``features.build_features``.
+        model: Fitted pipeline.
         raw_df: Raw customer extract.
-        threshold: Probability at or above which a customer is flagged.
+        threshold: Probability at which a customer is flagged as churn.
 
     Returns:
         A frame with columns customerID, churn_probability (0-1,
@@ -80,15 +77,18 @@ def main() -> None:
     args = parser.parse_args()
 
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI))
-    model = mlflow.sklearn.load_model(MODEL_URI)
-
+        
+    model = load_model(MODEL_URI)
+    if model is None:
+        raise ValueError(f"Loaded model from {MODEL_URI} is None.")
+    
     raw = load_raw(args.data)
-    scores = score_frame(model, raw, args.threshold)
-
+    scores = score(model, raw, args.threshold)
+    
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     scores.to_csv(out_path, index=False)
-
+    
     flagged = int(scores["churn_flag"].sum())
     print(f"scored    {len(scores)} customers")
     print(f"flagged   {flagged} ({flagged / len(scores):.1%}) at threshold {args.threshold}")

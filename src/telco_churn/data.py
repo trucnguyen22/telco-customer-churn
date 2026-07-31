@@ -1,9 +1,4 @@
-"""Loading and schema validation for the raw Telco customer extract.
-
-This module is the boundary between storage and the pipeline: every job
-(training or scoring) obtains its input DataFrame through :func:`load_raw`,
-which fails fast with a clear error if the file does not match the schema
-the rest of the pipeline was built against.
+"""Data loading: loading and schema validation for the raw customer extract.
 """
 
 from pathlib import Path
@@ -36,12 +31,7 @@ RAW_COLUMNS: list[str] = [
 
 
 def load_raw(path: str | Path) -> pd.DataFrame:
-    """Load the raw customer extract from a CSV file.
-
-    No cleaning is performed here: the returned frame is exactly what
-    storage contains (e.g. ``TotalCharges`` may arrive as text because
-    the export uses blank strings for missing values). Cleaning is the
-    responsibility of ``features.build_features``.
+    """Load the raw customer extract from a CSV file to pd.DataFrame.
 
     Args:
         path: Location of the raw CSV file.
