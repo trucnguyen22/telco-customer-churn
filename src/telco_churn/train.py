@@ -56,7 +56,6 @@ RF_PARAMS = {
 
 import logging
 
-logging.basicConfig()
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s - %(message)s",
@@ -89,36 +88,23 @@ def train(data_path: str | Path) -> dict[str, float]:
     """Run one training cycle, log it to MLflow, return test metrics."""
     
     # Load data, exclude brand-new customers (tenure == 0).
-    logger.info(f"Load data from {data_path}")
     raw = load_raw(data_path)
-    logger.info(f"Loaded {len(raw)} rows")
     raw = raw[raw["tenure"] > 0]
-    logger.info(f"Excluded new customers (tenure == 0); {len(raw)} rows remaining")
 
     # Clean, Prepare data
-    logger.info("Clean, Prepare data")
     X = build_features(raw)
     y = extract_target(raw)
-    logger.info(f"Built features: X shape {X.shape}")
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
     )
-    logger.info(f"Split data: train {len(X_train)}, test {len(X_test)}")
 
     # Wrap model into a pipeline
-    logger.info("Build pipeline")
-    pipeline = build_pipeline()
-    
     # Train and Evaluate
-    logger.info("Train model")
+    pipeline = build_pipeline()
     pipeline.fit(X_train, y_train)
-    
-    logger.info("Evaluate model")
     metrics = evaluate(pipeline, X_test, y_test)
-    logger.info(f"Evaluation metrics: {metrics}")
 
     # MLflow Tracking
-    logger.info("Log to MLflow")
     with mlflow.start_run():
         mlflow.log_params(RF_PARAMS)
         mlflow.log_params({"test_size": TEST_SIZE, "n_training_rows": len(X_train)})
@@ -130,7 +116,6 @@ def train(data_path: str | Path) -> dict[str, float]:
             input_example=X_train.head(5),
             registered_model_name=REGISTERED_MODEL_NAME,
         )
-    logger.info("Training cycle complete")
     return metrics
 
 
@@ -146,13 +131,10 @@ def main() -> None:
     args = parser.parse_args()
 
     # MLflow setups (uri, experiment, runs)
-    logger.info(f"MLflow tracking URI: {os.environ.get('MLFLOW_TRACKING_URI', DEFAULT_TRACKING_URI)}")
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI))
-    logger.info(f"Set experiment: {EXPERIMENT_NAME}")
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     # MLflow runs and Training process
-    logger.info("Starting training process")
     metrics = train(args.data)
     
     for name, value in metrics.items():
