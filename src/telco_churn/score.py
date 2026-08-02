@@ -28,7 +28,7 @@ MODEL_URI = "models:/telco-churn@production"
 DEFAULT_THRESHOLD = 0.5
 
 
-def score(model: Pipeline, raw_df: pd.DataFrame, threshold: float) -> pd.DataFrame:
+def score(model: Pipeline, data_path: str | Path, threshold: float) -> pd.DataFrame:
     """Score every customer in a raw extract.
 
     Row-preserving: one output row per input row.
@@ -42,11 +42,12 @@ def score(model: Pipeline, raw_df: pd.DataFrame, threshold: float) -> pd.DataFra
         A frame with columns customerID, churn_probability (0-1,
         rounded to 4 decimals) and churn_flag (bool).
     """
-    features = build_features(raw_df)
+    raw = load_raw(data_path)
+    features = build_features(raw)
     proba = model.predict_proba(features)[:, 1]
     return pd.DataFrame(
         {
-            "customerID": raw_df["customerID"].to_numpy(),
+            "customerID": raw["customerID"].to_numpy(),
             "churn_probability": proba.round(4),
             "churn_flag": proba >= threshold,
         }
@@ -76,17 +77,18 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # MLflow setup (uri)
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI))
-        
+    
+    # Model loading    
     model = load_model(MODEL_URI)
     if model is None:
         raise ValueError(f"Loaded model from {MODEL_URI} is None.")
     
-    raw = load_raw(args.data)
-    scores = score(model, raw, args.threshold)
-    
+    # Model scoring
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    scores = score(model, args.data, args.threshold)
     scores.to_csv(out_path, index=False)
     
     flagged = int(scores["churn_flag"].sum())
