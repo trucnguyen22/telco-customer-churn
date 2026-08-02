@@ -2,7 +2,7 @@
 
 Run from the repository root:
 
-    python -m telco_churn.train [--data PATH]
+    python -m telco_churn.train [--data PATH] [--promote]
 
 Each execution produces one MLflow run (parameters, metrics, fitted
 pipeline, "telco-churn" model version). The MLflow "production" alias is 
@@ -15,6 +15,7 @@ from pathlib import Path
 
 import mlflow
 import pandas as pd
+from mlflow import MlflowClient
 from mlflow.models import infer_signature
 from mlflow import sklearn
 from sklearn.compose import ColumnTransformer
@@ -37,7 +38,7 @@ from telco_churn.features import (
     build_features,
     extract_target,
 )
-from telco_churn.config import DATA_PATH, EXPERIMENT_NAME, MODEL_NAME, TRACKING_URI
+from telco_churn.config import DATA_PATH, EXPERIMENT_NAME, MODEL_NAME, PRODUCTION_ALIAS, TRACKING_URI
 
 import logging
 
@@ -131,7 +132,7 @@ def train(data_path: str | Path, random_state=42, test_size=0.2, promote: bool =
     metrics = _evaluate(pipeline, X_test, y_test)
 
     # MLflow Tracking
-    with mlflow.start_run():
+    with mlflow.start_run() as run:
         mlflow.log_metrics(metrics)
         sklearn.log_model(
             pipeline,
@@ -140,6 +141,21 @@ def train(data_path: str | Path, random_state=42, test_size=0.2, promote: bool =
             input_example=X_train.head(5),
             registered_model_name=MODEL_NAME,
         )
+
+    if promote:
+        client = MlflowClient()
+        versions = client.search_model_versions(
+            f"name='{MODEL_NAME}' and run_id='{run.info.run_id}'"
+        )
+        if versions:
+            version = versions[0].version
+            client.set_registered_model_alias(MODEL_NAME, PRODUCTION_ALIAS, version)
+            logger.info("promoted version %s to alias '%s'", version, PRODUCTION_ALIAS)
+        else:
+            logger.warning(
+                "could not find registered model version for run %s; skipping promotion",
+                run.info.run_id,
+            )
     return metrics
 
 
@@ -152,6 +168,11 @@ def main() -> None:
         default=DATA_PATH,
         help="Path to the raw customer CSV (default: %(default)s).",
     )
+    parser.add_argument(
+        "--promote",
+        action="store_true",
+        help="Promote the newly trained model version to the production alias.",
+    )
     args = parser.parse_args()
 
     # MLflow setup (uri, experiment, runs)
@@ -159,7 +180,7 @@ def main() -> None:
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     # MLflow runs and Training process
-    metrics = train(args.data)
+    metrics = train(args.data, promote=args.promote)
     
     for name, value in metrics.items():
         print(f"{name:9s} {value:.3f}")
