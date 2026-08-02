@@ -37,11 +37,7 @@ from telco_churn.features import (
     build_features,
     extract_target,
 )
-
-DEFAULT_DATA_PATH = "data/WA_Fn-UseC_-Telco-Customer-Churn.csv"
-DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
-EXPERIMENT_NAME = "telco-churn"
-REGISTERED_MODEL_NAME = "telco-churn"
+from telco_churn.config import DATA_PATH, EXPERIMENT_NAME, MODEL_NAME, TRACKING_URI
 
 import logging
 
@@ -101,7 +97,7 @@ def _evaluate(pipeline: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> di
     }
 
 
-def train(data_path: str | Path, random_state=42, test_size=0.2) -> dict[str, float]:
+def train(data_path: str | Path, random_state=42, test_size=0.2, promote: bool = False) -> dict[str, float]:
     """Train a churn model, evaluate it, and log the run to MLflow.
 
     The function loads the raw dataset, engineers features, splits the data
@@ -139,10 +135,10 @@ def train(data_path: str | Path, random_state=42, test_size=0.2) -> dict[str, fl
         mlflow.log_metrics(metrics)
         sklearn.log_model(
             pipeline,
-            name="model",
+            name="Random Forest",
             signature=infer_signature(X_train, pipeline.predict_proba(X_train)[:, 1]),
             input_example=X_train.head(5),
-            registered_model_name=REGISTERED_MODEL_NAME,
+            registered_model_name=MODEL_NAME,
         )
     return metrics
 
@@ -153,13 +149,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--data",
-        default=DEFAULT_DATA_PATH,
+        default=DATA_PATH,
         help="Path to the raw customer CSV (default: %(default)s).",
     )
     args = parser.parse_args()
 
     # MLflow setup (uri, experiment, runs)
-    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI))
+    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", TRACKING_URI))
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     # MLflow runs and Training process

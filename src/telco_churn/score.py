@@ -18,15 +18,12 @@ import pandas as pd
 from mlflow.sklearn import load_model
 from sklearn.pipeline import Pipeline
 
+from telco_churn.config import DATA_PATH, MODEL_URI, TRACKING_URI
 from telco_churn.data import load_raw
 from telco_churn.features import build_features
 
-DEFAULT_DATA_PATH = "data/WA_Fn-UseC_-Telco-Customer-Churn.csv"
 DEFAULT_OUTPUT_PATH = "outputs/churn_scores.csv"
-DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
-MODEL_URI = "models:/telco-churn@production"
 DEFAULT_THRESHOLD = 0.5
-
 
 def score_frame(model: Pipeline, raw_df: pd.DataFrame, threshold: float) -> pd.DataFrame:
     """Score customers for churn risk using a fitted pipeline.
@@ -62,7 +59,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--data",
-        default=DEFAULT_DATA_PATH,
+        default=DATA_PATH,
         help="Path to the raw customer CSV (default: %(default)s).",
     )
     parser.add_argument(
@@ -80,7 +77,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # MLflow setup (uri)
-    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI))
+    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", TRACKING_URI))
     
     # Model loading    
     try:
