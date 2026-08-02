@@ -43,7 +43,7 @@ def load_raw(path: str | Path) -> pd.DataFrame:
         FileNotFoundError: If ``path`` does not exist.
         ValueError: If the file's columns do not match ``RAW_COLUMNS``.
     """
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, dtype_backend='numpy_nullable')
     _validate_columns(df)
     return df
 
