@@ -52,15 +52,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def _build_pipeline() -> Pipeline:
-    """Build a preprocessing and modeling pipeline.
-    
-    Creates a scikit-learn Pipeline that combines:
-    - Numeric features: StandardScaler normalization
-    - Categorical features: OneHotEncoder with drop='first'
-    - Fitted RandomForestClassifier with predefined parameters
-    
+    """Create the preprocessing and modeling pipeline.
+
+    The pipeline standardizes numeric features, one-hot encodes categorical
+    features, and configures a RandomForestClassifier for churn prediction.
+
     Returns:
-        Pipeline: A fitted preprocessing and classification pipeline.
+        Pipeline: An unfitted scikit-learn pipeline ready to be trained.
     """
     preprocessor = ColumnTransformer(
         [
@@ -80,18 +78,17 @@ def _build_pipeline() -> Pipeline:
 
 
 def _evaluate(pipeline: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> dict[str, float]:
-    """Evaluate pipeline performance on test data.
-    
-    Computes classification metrics (accuracy, precision, recall, F1, ROC-AUC)
-    for the given pipeline on test features and target.
-    
+    """Compute classification metrics for a fitted pipeline on test data.
+
     Args:
-        pipeline: A fitted scikit-learn Pipeline for classification.
-        X_test: Test feature matrix.
-        y_test: Test target labels.
-    
+        pipeline: A fitted scikit-learn pipeline with ``predict`` and
+            ``predict_proba`` methods.
+        X_test: Feature values for the held-out test set.
+        y_test: True labels for the held-out test set.
+
     Returns:
-        Dictionary with metrics: 'accuracy', 'precision', 'recall', 'f1', 'roc_auc'.
+        Dict[str, float]: Metrics with keys ``accuracy``, ``precision``,
+        ``recall``, ``f1``, and ``roc_auc``.
     """
     pred = pipeline.predict(X_test)
     proba = pipeline.predict_proba(X_test)[:, 1]
@@ -105,20 +102,21 @@ def _evaluate(pipeline: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> di
 
 
 def train(data_path: str | Path, random_state=42, test_size=0.2) -> dict[str, float]:
-    """Run one training cycle, log it to MLflow, return test metrics.
-    
-    Loads raw data, builds features, splits into train/test sets, trains a
-    RandomForestClassifier pipeline, evaluates it, and logs the run to MLflow.
-    
+    """Train a churn model, evaluate it, and log the run to MLflow.
+
+    The function loads the raw dataset, engineers features, splits the data
+    into train and test sets, trains the pipeline, evaluates the model, and
+    logs the results to MLflow.
+
     Args:
         data_path: Path to the raw customer CSV file.
-        random_state: Random seed for train/test split and model. Default: 42.
-        test_size: Fraction of data to use for testing. Default: 0.2.
-    
+        random_state: Random seed for the train/test split and model setup.
+        test_size: Fraction of rows reserved for the test set.
+
     Returns:
-        metrics = evaluate(pipeline, X_test, y_test).
+        Dict[str, float]: Classification metrics returned by ``_evaluate``.
     """
-    
+
     # Load data.
     raw = load_raw(data_path)
     raw = raw[raw["tenure"] > 0]
@@ -128,7 +126,7 @@ def train(data_path: str | Path, random_state=42, test_size=0.2) -> dict[str, fl
     X = build_features(raw)
     y = extract_target(raw)
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, stratify=y, random_state=42
+        X, y, test_size=test_size, stratify=y, random_state=random_state
     )
 
     # Build, Train, Evaluate pipeline

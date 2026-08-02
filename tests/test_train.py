@@ -3,7 +3,7 @@
 import pandas as pd
 
 from telco_churn.features import build_features, extract_target
-from telco_churn.train import build_pipeline
+from telco_churn.train import _build_pipeline
 
 
 def test_pipeline_survives_unseen_categories(make_raw):
@@ -14,7 +14,7 @@ def test_pipeline_survives_unseen_categories(make_raw):
         [make_raw(Churn="Yes"), make_raw(Churn="No", Contract="Two year")],
         ignore_index=True,
     )
-    pipeline = build_pipeline()
+    pipeline = _build_pipeline()
     pipeline.fit(build_features(train_raw), extract_target(train_raw))
 
     unseen = build_features(make_raw(InternetService="Quantum Fiber 9000"))
