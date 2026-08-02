@@ -60,7 +60,12 @@ def build_features(raw_df: pd.DataFrame) -> pd.DataFrame:
     df["SeniorCitizen"] = df["SeniorCitizen"].map({0: "No", 1: "Yes"})
     df["num_addon_services"] = _count_addon_services(df)
     df["charges_delta"] = _compute_charges_delta(df)
-    return df[FEATURE_COLUMNS]
+    
+    features = df[FEATURE_COLUMNS]
+    if features.isna().any().any():
+        bad = features.columns[features.isna().any()].tolist()
+        raise ValueError(f"Feature engineering produced nulls in: {bad}")
+    return features
 
 
 def extract_target(raw_df: pd.DataFrame) -> pd.Series:
