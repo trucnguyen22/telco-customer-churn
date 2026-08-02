@@ -28,10 +28,8 @@ MODEL_URI = "models:/telco-churn@production"
 DEFAULT_THRESHOLD = 0.5
 
 
-def score(model: Pipeline, data_path: str | Path, threshold: float) -> pd.DataFrame:
-    """Score every customer in a raw extract.
-
-    Row-preserving: one output row per input row.
+def score_frame(model: Pipeline, raw_df: pd.DataFrame, threshold: float) -> pd.DataFrame:
+    """Score every customer in a raw extract. Row-preserving.
 
     Args:
         model: Fitted pipeline.
@@ -39,15 +37,13 @@ def score(model: Pipeline, data_path: str | Path, threshold: float) -> pd.DataFr
         threshold: Probability at which a customer is flagged as churn.
 
     Returns:
-        A frame with columns customerID, churn_probability (0-1,
-        rounded to 4 decimals) and churn_flag (bool).
+        A pd.DataFrame (customerID, churn_probability, churn_flag).
     """
-    raw = load_raw(data_path)
-    features = build_features(raw)
+    features = build_features(raw_df)
     proba = model.predict_proba(features)[:, 1]
     return pd.DataFrame(
         {
-            "customerID": raw["customerID"].to_numpy(),
+            "customerID": raw_df["customerID"].to_numpy(),
             "churn_probability": proba.round(4),
             "churn_flag": proba >= threshold,
         }
@@ -81,14 +77,19 @@ def main() -> None:
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", DEFAULT_TRACKING_URI))
     
     # Model loading    
-    model = load_model(MODEL_URI)
-    if model is None:
-        raise ValueError(f"Loaded model from {MODEL_URI} is None.")
+    try:
+        model = load_model(MODEL_URI)
+    except mlflow.MlflowException as exc:
+        raise SystemExit(
+            f"No model found at {MODEL_URI}. "
+            "Run `python -m telco_churn.train`, then assign the 'production' "
+            "alias to a model version in the MLflow UI."
+        ) from exc
     
     # Model scoring
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    scores = score(model, args.data, args.threshold)
+    scores = score_frame(model, load_raw(args.data), args.threshold) # type: ignore
     scores.to_csv(out_path, index=False)
     
     flagged = int(scores["churn_flag"].sum())
