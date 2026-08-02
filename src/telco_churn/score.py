@@ -29,15 +29,21 @@ DEFAULT_THRESHOLD = 0.5
 
 
 def score_frame(model: Pipeline, raw_df: pd.DataFrame, threshold: float) -> pd.DataFrame:
-    """Score every customer in a raw extract. Row-preserving.
+    """Score customers for churn risk using a fitted pipeline.
+
+    Extracts features from raw customer data, applies the model, and returns
+    scores with churn flags. Row order is preserved.
 
     Args:
-        model: Fitted pipeline.
-        raw_df: Raw customer extract.
-        threshold: Probability at which a customer is flagged as churn.
+        model: Fitted classification pipeline with predict_proba() method.
+        raw_df: Raw customer extract with required feature columns.
+        threshold: Probability threshold (0-1) for flagging churn risk.
 
     Returns:
-        A pd.DataFrame (customerID, churn_probability, churn_flag).
+        DataFrame with columns:
+        - customerID (str): Customer identifier from raw_df.
+        - churn_probability (float): Predicted churn probability (0-1), rounded to 4 decimals.
+        - churn_flag (bool): True if churn_probability >= threshold.
     """
     features = build_features(raw_df)
     proba = model.predict_proba(features)[:, 1]

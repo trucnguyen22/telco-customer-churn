@@ -43,17 +43,6 @@ DEFAULT_TRACKING_URI = "sqlite:///mlflow.db"
 EXPERIMENT_NAME = "telco-churn"
 REGISTERED_MODEL_NAME = "telco-churn"
 
-TEST_SIZE = 0.2
-RANDOM_STATE = 42
-RF_PARAMS = {
-    "n_estimators": 300,
-    "max_depth": 10,
-    "class_weight": "balanced",
-    "random_state": RANDOM_STATE,
-    "n_jobs": -1,
-}
-
-
 import logging
 
 logging.basicConfig(
@@ -62,17 +51,48 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def build_pipeline() -> Pipeline:
+def _build_pipeline() -> Pipeline:
+    """Build a preprocessing and modeling pipeline.
+    
+    Creates a scikit-learn Pipeline that combines:
+    - Numeric features: StandardScaler normalization
+    - Categorical features: OneHotEncoder with drop='first'
+    - Fitted RandomForestClassifier with predefined parameters
+    
+    Returns:
+        Pipeline: A fitted preprocessing and classification pipeline.
+    """
     preprocessor = ColumnTransformer(
         [
             ("num", StandardScaler(), NUMERIC_FEATURES),
             ("cat", OneHotEncoder(drop="first", handle_unknown="ignore", sparse_output=False), CATEGORICAL_FEATURES)
         ]
     )
-    return Pipeline([("pre", preprocessor), ("model", RandomForestClassifier(**RF_PARAMS))])
+    return Pipeline([
+        ("pre", preprocessor),
+        ("model", RandomForestClassifier(
+            n_estimators=300,
+            max_depth=10,
+            class_weight="balanced",
+            random_state=42,
+            n_jobs=-1,
+        ))])
 
 
-def evaluate(pipeline: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> dict[str, float]:
+def _evaluate(pipeline: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> dict[str, float]:
+    """Evaluate pipeline performance on test data.
+    
+    Computes classification metrics (accuracy, precision, recall, F1, ROC-AUC)
+    for the given pipeline on test features and target.
+    
+    Args:
+        pipeline: A fitted scikit-learn Pipeline for classification.
+        X_test: Test feature matrix.
+        y_test: Test target labels.
+    
+    Returns:
+        Dictionary with metrics: 'accuracy', 'precision', 'recall', 'f1', 'roc_auc'.
+    """
     pred = pipeline.predict(X_test)
     proba = pipeline.predict_proba(X_test)[:, 1]
     return {
@@ -84,29 +104,40 @@ def evaluate(pipeline: Pipeline, X_test: pd.DataFrame, y_test: pd.Series) -> dic
     }
 
 
-def train(data_path: str | Path) -> dict[str, float]:
-    """Run one training cycle, log it to MLflow, return test metrics."""
+def train(data_path: str | Path, random_state=42, test_size=0.2) -> dict[str, float]:
+    """Run one training cycle, log it to MLflow, return test metrics.
     
-    # Load data, exclude brand-new customers (tenure == 0).
+    Loads raw data, builds features, splits into train/test sets, trains a
+    RandomForestClassifier pipeline, evaluates it, and logs the run to MLflow.
+    
+    Args:
+        data_path: Path to the raw customer CSV file.
+        random_state: Random seed for train/test split and model. Default: 42.
+        test_size: Fraction of data to use for testing. Default: 0.2.
+    
+    Returns:
+        metrics = evaluate(pipeline, X_test, y_test).
+    """
+    
+    # Load data.
     raw = load_raw(data_path)
     raw = raw[raw["tenure"] > 0]
+    logger.info("loaded %d rows from %s", len(raw), data_path)
 
     # Feature, Prepare data
     X = build_features(raw)
     y = extract_target(raw)
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
+        X, y, test_size=0.2, stratify=y, random_state=42
     )
 
     # Build, Train, Evaluate pipeline
-    pipeline = build_pipeline()
+    pipeline = _build_pipeline()
     pipeline.fit(X_train, y_train)
-    metrics = evaluate(pipeline, X_test, y_test)
+    metrics = _evaluate(pipeline, X_test, y_test)
 
     # MLflow Tracking
     with mlflow.start_run():
-        mlflow.log_params(RF_PARAMS)
-        mlflow.log_params({"test_size": TEST_SIZE, "n_training_rows": len(X_train)})
         mlflow.log_metrics(metrics)
         sklearn.log_model(
             pipeline,
