@@ -36,7 +36,11 @@ def _current_alias_version(client: MlflowClient, alias: str) -> str | None:
 
 
 def _version_for_run(client: MlflowClient, run_id: str) -> str:
-    """Return the registered model version created from a run."""
+    """Return the registered model version created from a run.
+
+    Raises:
+        SystemExit: If no registered version was produced by ``run_id``.
+    """
     versions = client.search_model_versions(
         f"name='{MODEL_NAME}' and run_id='{run_id}'"
     )
@@ -46,7 +50,14 @@ def _version_for_run(client: MlflowClient, run_id: str) -> str:
 
 
 def _best_version(client: MlflowClient, metric: str) -> str:
-    """Return the best registered version for a metric."""
+    """Return the best registered version for a metric.
+
+    The function examines logged metrics on the runs that produced registered
+    model versions and returns the version with the largest value for ``metric``.
+
+    Raises:
+        SystemExit: If no registered version has a logged metric named ``metric``.
+    """
     scored = []
     for v in client.search_model_versions(f"name='{MODEL_NAME}'"):
         run = client.get_run(v.run_id)  # type: ignore
@@ -70,9 +81,9 @@ def _list_versions(client: MlflowClient) -> None:
         raise SystemExit(f"{MODEL_NAME} has no versions. Run the train.py first.")
     print(f"{'ver':>4}  {'run_id':10}  {'roc_auc':>8}  {'f1':>6}  aliases")
     for v in versions:
-        m = client.get_run(v.run_id).data.metrics
+        m = client.get_run(v.run_id).data.metrics # type: ignore
         print(
-            f"{v.version:>4}  {v.run_id[:10]}  {m.get('roc_auc', float('nan')):>8.4f}  "
+            f"{v.version:>4}  {v.run_id[:10]}  {m.get('roc_auc', float('nan')):>8.4f}  " # type: ignore
             f"{m.get('f1', float('nan')):>6.4f}  {','.join(v.aliases) or '-'}"
         )
 

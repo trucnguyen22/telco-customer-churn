@@ -109,6 +109,8 @@ def train(data_path: str | Path, random_state=42, test_size=0.2, promote: bool =
         data_path: Path to the raw customer CSV file.
         random_state: Random seed for the train/test split and model setup.
         test_size: Fraction of rows reserved for the test set.
+        promote: If True, attempt to promote the model version produced by
+            this run to the production alias in the MLflow registry.
 
     Returns:
         Dict[str, float]: Classification metrics returned by ``_evaluate``.
